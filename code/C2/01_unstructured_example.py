@@ -11,7 +11,6 @@ elements = partition(
 
 # 打印解析结果
 print(f"解析完成: {len(elements)} 个元素, {sum(len(str(e)) for e in elements)} 字符")
-
 # 统计元素类型
 from collections import Counter
 types = Counter(e.category for e in elements)
