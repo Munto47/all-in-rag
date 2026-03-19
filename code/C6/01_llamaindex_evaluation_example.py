@@ -72,7 +72,7 @@ async def main():
     print("\n=== 评估句子窗口检索 ===")
     sentence_runner = BatchEvalRunner(evaluators, workers=2, show_progress=True)
     sentence_response_results = await sentence_runner.aevaluate_queries(
-        queries=queries, query_engine=sentence_query_engine
+        queries=queries, query_engine=sentence_query_engine #句窗RAG检索查询引擎
     )
 
     # 常规分块检索响应评估

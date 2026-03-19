@@ -3,6 +3,7 @@ from langchain_community.vectorstores import FAISS
 from langchain.retrievers import ContextualCompressionRetriever
 from langchain.retrievers.document_compressors import LLMChainExtractor
 from langchain_community.embeddings import HuggingFaceBgeEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import TextLoader
 from langchain_deepseek import ChatDeepSeek
@@ -56,10 +57,12 @@ class ColBERTReranker(BaseDocumentCompressor):
             doc_mask = doc_masks[i:i+1]
 
             # 计算相似度矩阵
+            # 添加一个第0维，也就是批次，随后将倒数第二维和倒数第一维互换
             similarity_matrix = torch.matmul(query_emb, doc_emb.unsqueeze(0).transpose(-2, -1))
 
-            # 应用文档mask
+            # 应用文档mask，同时将[1,5]变为[1,1,5]后续出发广播机制自动复印
             doc_mask_expanded = doc_mask.unsqueeze(1)
+            # 将取反之后为True对应的值改为1e-9
             similarity_matrix = similarity_matrix.masked_fill(~doc_mask_expanded.bool(), -1e9)
 
             # MaxSim操作
@@ -130,7 +133,7 @@ class ColBERTReranker(BaseDocumentCompressor):
 
 
 # 初始化配置
-hf_bge_embeddings = HuggingFaceBgeEmbeddings(
+hf_bge_embeddings = HuggingFaceEmbeddings(
     model_name="BAAI/bge-large-zh-v1.5"
 )
 
@@ -150,10 +153,10 @@ docs = text_splitter.split_documents(documents)
 vectorstore = FAISS.from_documents(docs, hf_bge_embeddings)
 base_retriever = vectorstore.as_retriever(search_kwargs={"k": 20})
 
-# 3. 设置ColBERT重排序器
+# 3. 设置ColBERT重排序器 用于细筛
 reranker = ColBERTReranker()
 
-# 4. 设置LLM压缩器
+# 4. 设置LLM压缩器 用于提纯
 compressor = LLMChainExtractor.from_llm(llm)
 
 # 5. 使用DocumentCompressorPipeline组装压缩管道
@@ -164,8 +167,8 @@ pipeline_compressor = DocumentCompressorPipeline(
 
 # 6. 创建最终的压缩检索器
 final_retriever = ContextualCompressionRetriever(
-    base_compressor=pipeline_compressor,
-    base_retriever=base_retriever
+    base_retriever=base_retriever, # 用于初筛
+    base_compressor=pipeline_compressor
 )
 
 # 7. 执行查询并展示结果
